@@ -82,23 +82,26 @@ public class Utils {
 	        }
 	        
 	        String timeStart = data.get("leaving");//Check its numeric data
-	        arr = timeStart.split(":");
+	        int[] start;
 	        try{
-	        	int hour = Integer.parseInt(arr[0]);
-	        	if(hour > 24 || hour < 0)
-	        		throw new Exception();
-
-	        	int min = Integer.parseInt(arr[1]);
-	        	if(min > 59 || min < 0)
-	        		throw new Exception();
-	        
+	        	start = isValidTime(timeStart, null);
 	        }catch(Exception e){
 				return "{\"valid\":\"false\", \"errMsg\":\"Please enter a valid time for the trip to start.\"}";
 	        }
-	        
 	        boolean residential = data.get("isResidential").equalsIgnoreCase("true");//convert to bool
-	        
 	        String end = data.get("tripEnd");//Check its after start of trip, and is numeric
+	        try{
+	        	if(residential){
+	        		int e = Integer.parseInt(end);
+	        		if(e <= 0)
+	        			throw new Exception();
+	        	}else{
+		        	isValidTime(end, start);
+	        	}
+	        }catch(Exception e){
+				return "{\"valid\":\"false\", \"errMsg\":\"Please enter a valid time for the trip to end.\"}";
+	        }
+	        	
 	        
 	        String purp = data.get("purpose");
 	        
@@ -108,9 +111,8 @@ public class Utils {
 
 	        String staff = data.get("staff").replace("\n\n\n", "\n");//Check enough staff to cover students
 	        staff = staff.replace("\n\n", "\n").trim();
-	        System.out.println(((max-1)/20)+1);
-	        System.out.println(staff.split("\n").length);
-	        
+	        if(staff.equals(""))
+				return "{\"valid\":\"false\", \"errMsg\":\"Not enough staff.\"}";
 	        if(!(staff.split("\n").length >= ((max-1)/20)+1))
 				return "{\"valid\":\"false\", \"errMsg\":\"Not enough staff.\"}";
 	        
@@ -118,17 +120,45 @@ public class Utils {
 	        String trans = data.get("modeOfTransport");
 	        
 	        int cost = Integer.parseInt(data.get("totalCost"));//Check its a number
-	        
+	        if(cost < 0)
+				return "{\"valid\":\"false\", \"errMsg\":\"Invalid total cost.\"}";
 	        //TODO Save all data to a database
 		}catch(Exception e){
 			//An error has occoured, so details are invalid
-			return "{\"valid\":\"false\", \"errMsg\":\"Please check your inputs\"}";
+			return "{\"valid\":\"false\", \"errMsg\":\"Please check your inputs.\"}";
 		}
 
 		//TODO: contact database, and add details to trip, if not exists.
 		//If they do then throw an error.
 		//Return valid to user
 		return "{\"valid\":\"true\"}";
+	}
+
+	private int[] isValidTime(String timeStart, int[] store) throws Exception{
+		
+        String[] arr = timeStart.split(":");
+    	int hour = Integer.parseInt(arr[0]);
+    	if(hour > 24 || hour < 0)
+    		throw new Exception();
+
+    	int min = Integer.parseInt(arr[1]);
+    	if(min > 59 || min < 0)
+    		throw new Exception();
+    	if(store == null){
+    		store = new int[2];
+	    	store[0] = hour;
+	    	store[1] = min;
+    	}else{
+    		if(hour < store[0]){//if end is less than start, throw err
+        		throw new Exception();
+    		}else{
+    			if(hour == store[0] && min <= store[1]){
+    				//if it ends the same hour, and the minute it ends is <= to when it starts, throw err
+            		throw new Exception();
+    			}
+    		}
+    	}
+    	return store;
 	}
 
 	//Adds a message to the log.
