@@ -22,28 +22,26 @@ public class Utils {
 		String response;
 		String request = data.get("request").toLowerCase();
 		switch(request){
+		case("login")://Logs user in
+			response = logIn(data);
+			break;
 		case("new trip")://Starts making a new trip
 			response = initTrip(data);
 			break;
 		case("set data")://Sets the variables the user enters
 			response = setTripDetails(data);
 			break;
+		case("file upload")://Sets the variables the user enters
+			response = "{\"valid\":\"true\", \"errMsg\":\"//TODO.\"}";
+			break;
 		default:
-			response = "{//TODO err msg}"+request;
+			response = "{\"valid\":\"false\", \"errMsg\":\"Invalid data.\"}";
 			break;
 		}
 		return response;
 	}
 	
-	private boolean validateUser(String token){
-		//TODO: check if any users have this token.  If not, its invalid.
-		//Tokens are valid for 30 mins, and are reset on login
-		return true;
-	}
-	
-	private String initTrip(HashMap<String, String> data) {
-		if(!validateUser(data.get("token")))
-			return "{\"valid\":\"false\", \"errMsg\":\"Invalid token.  Please log in.\"}";
+	private String logIn(HashMap<String, String> data){
 		//Check email provided is valid
 		String email = data.get("email");
 		
@@ -51,6 +49,19 @@ public class Utils {
 			return "{\"valid\":\"false\", \"errMsg\":\"Please use a valid woking college E-Mail.\"}";
 		}
 		//Email valid
+		System.out.println(data.get("password"));
+		return "{\"valid\":\"true\", \"token\":\""+123+"\"}";
+	}
+	
+	private boolean validateUser(String token){
+		//TODO: check if any users have this token.  If not, its invalid.
+		//Tokens are valid for 30 mins, and are reset on login
+		return token.equalsIgnoreCase("123");
+	}
+	
+	private String initTrip(HashMap<String, String> data) {
+		if(!validateUser(data.get("token")))
+			return "{\"valid\":\"false\", \"errMsg\":\"Invalid token.  Please log in.\"}";
 		
 		String tripID = "1234";
 		//TODO: contact database, and add a new trip.
