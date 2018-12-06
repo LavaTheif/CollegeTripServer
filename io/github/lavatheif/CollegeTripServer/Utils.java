@@ -25,6 +25,12 @@ public class Utils {
 		case("login")://Logs user in
 			response = logIn(data);
 			break;
+		case("trips")://returns all trips that the user is able to view
+			/*Returns:
+			 * trip ID : {Trip location, creator, isAccepted}
+			 */
+			response = "{}";
+			break;
 		case("new trip")://Starts making a new trip
 			response = initTrip(data);
 			break;
@@ -56,6 +62,8 @@ public class Utils {
 	private boolean validateUser(String token){
 		//TODO: check if any users have this token.  If not, its invalid.
 		//Tokens are valid for 30 mins, and are reset on login
+		if(token == null)
+			return false;
 		return token.equalsIgnoreCase("123");
 	}
 	
@@ -112,7 +120,6 @@ public class Utils {
 	        }catch(Exception e){
 				return "{\"valid\":\"false\", \"errMsg\":\"Please enter a valid time for the trip to end.\"}";
 	        }
-	        	
 	        
 	        String purp = data.get("purpose");
 	        
