@@ -10,9 +10,14 @@ public class SocketConnection implements Runnable {
 	public void run() {
 		try {
 			boolean running = true;
-			ServerSocket server = new ServerSocket(Utils.PORT);//TODO make a var in conf
-			while(running){
-				Socket client = server.accept();
+			// start the server on PORT
+			// TODO make a var in conf
+			ServerSocket server = new ServerSocket(Utils.PORT);
+
+			while (running) {// while the app is running
+				Socket client = server.accept();// if a client connects,
+				// pass them to the socket handler via a new thread, so that
+				// more clients can still connect.
 				new Thread(new SocketHandler(client)).start();
 			}
 			server.close();

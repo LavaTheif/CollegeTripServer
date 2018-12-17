@@ -15,66 +15,74 @@ public class _INIT_ extends Utils {
 
 	public _INIT_(File config) throws Exception {
 		// Load Config Details
-		if (!config.exists()) {//TODO change
+		if (!config.exists()) {// TODO change to not just start up, but
+			// set the default config.
 			setUpSocket();
 			return;
-//			throw new Exception("Config does not exist at this location.");
+			// throw new Exception("Config does not exist at this location.");
 		}
 		HashMap<String, String> configContents = stringToJSON(readFile(config));
 
 		System.out.println(configContents.get("test"));
-		/* TODO Config details:
+		/*
+		 * TODO Config details:
 		 * 
-		 * PORT
-		 * email stuff
+		 * PORT, ip, username, password email login details admin accounts
+		 * higher admin accounts
 		 */
-		
-		//Set up sockets for desktop clients to connect to.
+
+		// Set up sockets for desktop clients to connect to.
 		setUpSocket();
-		
-		//Set up sockets for websites to connect to.
-//		setUpWebSocket();
+
+		// We currently aren't using this.
+		// Set up sockets for websites to connect to.
+		// setUpWebSocket();
 	}
-	
-	
+
 	private void setUpSocket() {
+		// start them on a new thread.
 		new Thread(new SocketConnection()).start();
 	}
 
-
-//	private void setUpWebSocket(){
-//		// Set up listeners for clients.
-//		try {
-//			//Init the server
-//			Server clientConnect = new Server(PORT);
-//			ContextHandlerCollection contexts = new ContextHandlerCollection();
-//			String url = "/college-trips";
-//			
-//			//Set data for the socket
-//			WebSocketHandler wsHandler = new WebSocketHandler() {
-//				@Override
-//				public void configure(WebSocketServletFactory factory) {
-//					//Adds the socket handler class to to socket
-//					factory.register(WebSocketConnection.class);
-//					// Times out after 5 seconds
-//					factory.getPolicy().setIdleTimeout(5000);
-//				}
-//			};
-//			
-//			ContextHandler context = new ContextHandler();
-////			Add the path for the socket
-//			context.setContextPath(url);
-//			context.setHandler(wsHandler);
-//			contexts.addHandler(context);
-//			clientConnect.setHandler(contexts);
-//			
-//			log("Listening on port "+PORT);
-//			clientConnect.start();//Start running
-//		} catch (Exception e) {
-//			//An error has occurred
-//			log("\n###\n\nAn error occoured while setting up server on port " + PORT + "\n\n###");
-//			log(e.getStackTrace());
-//			System.exit(1);
-//		}
-//	}
+	// This code would set up a websocket, but we arent using it atm.
+	// It requires Jetty, which can be added using maven, however the
+	// college systems dont allow maven for some reason.
+	{
+		// private void setUpWebSocket(){
+		// // Set up listeners for clients.
+		// try {
+		// //Init the server
+		// Server clientConnect = new Server(PORT);
+		// ContextHandlerCollection contexts = new ContextHandlerCollection();
+		// String url = "/college-trips";
+		//
+		// //Set data for the socket
+		// WebSocketHandler wsHandler = new WebSocketHandler() {
+		// @Override
+		// public void configure(WebSocketServletFactory factory) {
+		// //Adds the socket handler class to to socket
+		// factory.register(WebSocketConnection.class);
+		// // Times out after 5 seconds
+		// factory.getPolicy().setIdleTimeout(5000);
+		// }
+		// };
+		//
+		// ContextHandler context = new ContextHandler();
+		//// Add the path for the socket
+		// context.setContextPath(url);
+		// context.setHandler(wsHandler);
+		// contexts.addHandler(context);
+		// clientConnect.setHandler(contexts);
+		//
+		// log("Listening on port "+PORT);
+		// clientConnect.start();//Start running
+		// } catch (Exception e) {
+		// //An error has occurred
+		// log("\n###\n\nAn error occoured while setting up server on port " +
+		// PORT + "\n\n###");
+		// log(e.getStackTrace());
+		// System.exit(1);
+		// }
+		// }
+	}
 }

@@ -13,6 +13,11 @@ import io.github.lavatheif.CollegeTripServer.Utils;
 //
 //@WebSocket
 public class WebSocketConnection extends Utils {
+	
+	//This is the class that handles websocket connections.
+	//It is currently not used, however should work if all
+	//websocket code is uncommented, and Jetty is added.
+	
 //	
 //	@OnWebSocketClose
 //	public void onClose(Session session, int statusCode, String reason) {
@@ -32,7 +37,7 @@ public class WebSocketConnection extends Utils {
 //	public void onMessage(Session client, String message) {
 //		try {
 //			System.out.println(message);
-//			client.getRemote().sendString(message);
+//			client.getRemote().sendString(evaluate(message));
 //		} catch (IOException e) {
 //			e.printStackTrace();
 //		}
