@@ -156,14 +156,21 @@ public class Utils {
 		// get the number of items in the database, and set this as the id.
 		// IDs start at 0 and count up
 		int tripID = (int) (long) getFirst("SELECT count(*) FROM trips;").get("count(*)");
+		System.out.println("1");
 
 		// contact database, and add a new trip.
 		alterDataBase("INSERT INTO trips(id, creator) VALUES(" + tripID + ", \"" + data.get("id") + "\");");
-
+		String teachersString = "";
+		System.out.println("2");
 		// TODO save trip to users data
-
+		List teachers = queryDataBase("SELECT email FROM users;");
+		System.out.println("3");
+		for(int i = 0;i<teachers.size();i++){
+			teachersString+= teachers.get(i)  + "-";
+		}
+		System.out.println("4");
 		// Return trip ID to user
-		return "{\"valid\":\"true\", \"trip id\":\"" + tripID + "\"}";
+		return "{\"valid\":\"true\", \"trip id\":\"" + tripID + "\", \"teachersString\":\""+ teachersString + "\"}";
 	}
 
 	private String setTripDetails(HashMap<String, String> data) {
@@ -180,12 +187,17 @@ public class Utils {
 			// This is the command executed on the DB
 			String command = "";
 
-			// Get trip location
-			String loc = data.get("location");
-			command += "location=\"" + loc + "\", ";
 
 			// get trip address
 			String add = data.get("address");
+			//makes sure an address was added
+			if(add.contains("--"))
+				return "{\"valid\":\"false\", \"errMsg\":\"Please fill out the location section.\"}";
+			if(add.endsWith("-"))
+				return "{\"valid\":\"false\", \"errMsg\":\"Please fill out the location section.\"}";
+			if(add.startsWith("-"))
+				return "{\"valid\":\"false\", \"errMsg\":\"Please fill out the location section.\"}";
+			add.replaceAll("-", ",");
 			command += "address=\"" + add + "\", ";
 
 			// get trip date
@@ -278,7 +290,22 @@ public class Utils {
 			// max students attending, return an error.
 			if (!(staff.split("\n").length >= ((max - 1) / 20) + 1))
 				return "{\"valid\":\"false\", \"errMsg\":\"Not enough staff.\"}";
-
+			// if two of the same staff are selected, return an error.
+			boolean staffSame = false;
+			String[] staffArray = staff.split("\n");
+			for(int i = 0;i<staffArray.length;i++){
+				for(int j = 0;j<staffArray.length;j++){
+					if(!(i == j)){
+						if(staffArray[i].equals(staffArray[j]) &&!(staffArray[i].equals(" "))){
+							staffSame = true;
+						}
+					}
+				}
+			}
+			
+			if(staffSame){
+				return "{\"valid\":\"false\", \"errMsg\":\"Staff member entered twice.\"}";
+			}
 			// TODO: add staff to command
 			// command+="staff=[{\"staff\":\""+staff.replace("\n", ",")+"\"}],
 			// ";
