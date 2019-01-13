@@ -1,6 +1,7 @@
 package io.github.lavatheif.CollegeTripServer;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 //import org.eclipse.jetty.server.Server;
@@ -15,21 +16,34 @@ public class _INIT_ extends Utils {
 
 	public _INIT_(File config) throws Exception {
 		// Load Config Details
-		if (!config.exists()) {// TODO change to not just start up, but
-			// set the default config.
-			setUpSocket();
-			return;
+//		if (!config.exists()) {// TODO change to not just start up, but
+//			// set the default config.
+//			setUpSocket();
+//			return;
 			// throw new Exception("Config does not exist at this location.");
-		}
-		HashMap<String, String> configContents = stringToJSON(readFile(config));
+//		}
+//		HashMap<String, String> configContents = stringToJSON(readFile(config));
 
-		System.out.println(configContents.get("test"));
+//		System.out.println(configContents.get("test"));
 		/*
 		 * TODO Config details:
 		 * 
 		 * PORT, ip, username, password email login details admin accounts
 		 * higher admin accounts
 		 */
+				
+		initDBs();
+		
+		//TODO: Load from config
+		ArrayList<String> admUsrnms = new ArrayList<>();
+		admUsrnms.add("test_admn");
+		
+		String finalAdmn = "test_brett";
+		
+		for(String s : admUsrnms)
+			admins.add(Integer.parseInt(getFirst("SELECT id FROM users WHERE email=\""+s+"@woking.ac.uk\";").get("id")+""));
+		
+		finalAdmin = Integer.parseInt(getFirst("SELECT id FROM users WHERE email=\""+finalAdmn+"@woking.ac.uk\";").get("id")+"");
 
 		// Set up sockets for desktop clients to connect to.
 		setUpSocket();
