@@ -1,12 +1,16 @@
 package io.github.lavatheif.CollegeTripServer;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +21,14 @@ import com.google.gson.Gson;
 
 public class Utils {
 	public static final int PORT = 25000;
+	
+	public static ArrayList<Integer> admins = new ArrayList<>();
+	public static int finalAdmin;
+	
+	public static int tripsToLoad = 10;
+
+	public static Connection DBalter;
+	public static Connection DBquery;
 
 	/**
 	 * A function that takes the message from the client as an input, and
@@ -51,12 +63,20 @@ public class Utils {
 		case ("new trip"):// Starts making a new trip
 			response = initTrip(data);
 			break;
+		case ("get trip"):// gets a trips details
+			response = getTrip(data);
+			break;
 		case ("set data"):// Sets the variables the user enters
 			response = setTripDetails(data);
 			break;
 		case ("file upload"):// Sets the variables the user enters
-			alterDataBase("UPDATE trips SET approved=false WHERE id=" + data.get("tripID") + ";");
-			response = "{\"valid\":\"true\", \"errMsg\":\"//TODO.\"}";
+			response = uploadFiles(data);
+			break;
+		case ("accept"):// Allows admins to accept the trip
+			response = approveTrip(data);
+			break;
+		case ("deny"):// Allows admins to accept the trip
+			response = denyTrip(data);
 			break;
 		default:
 			response = "{\"valid\":\"false\", \"errMsg\":\"Invalid data.\"}";
@@ -64,10 +84,107 @@ public class Utils {
 		}
 		return response;
 	}
+	
+	private String denyTrip(HashMap<String, String> data) {
+		int userID = Integer.parseInt(data.get("id"));
+		
+		if(!admins.contains(userID) && userID != finalAdmin){
+			return "{\"valid\":\"false\", \"errMsg\":\"You are not permitted to do that action.\"}";
+		}
+		
+		String reason = data.get("reason");
+		if(reason.equalsIgnoreCase("Reason to Deny Trip.")||reason.equals(""))
+			return "{\"valid\":\"false\", \"errMsg\":\"Please give a reason for denying the trip.\"}";
+		
+		System.out.println(reason);
+		
+		//TODO: Email everyone who accepted it
+		//TODO: Email creator
+		
+		alterDataBase("UPDATE trips SET initial_approvals=\"\" WHERE id=" + data.get("trip-ID") + ";");
+		
+		return "{\"valid\":\"true\"}";
+	}
+	
+	private String approveTrip(HashMap<String, String> data) {
+		int userID = Integer.parseInt(data.get("id"));
+		String command;
+		
+		if(admins.contains(userID)) {
+//			Check if init approvals contains id, if not add them to it.
+//			if all users have accepted init approvals, email brett
+			
+			String all = ""+getFirst("SELECT initial_approvals FROM trips WHERE id=" + data.get("trip-ID") + ";").get("initial_approvals");
+			if(all.equalsIgnoreCase("null")||all.equalsIgnoreCase(""))
+				all=""+userID;
+			else{
+				if(!Arrays.asList(all.split(",")).contains(""+userID)){
+					all+=","+userID;
+				}else{
+					return "{\"valid\":\"false\", \"errMsg\":\"You already accepted this trip.\"}";
+				}
+			}
+			command = "initial_approvals=\""+all+"\"";//all approvals seperated by ,
+			
+			boolean sendEmail = true;
+			for(int id : admins){
+				if(!Arrays.asList(all.split(",")).contains(id+""))
+					sendEmail = false;
+			}
+			
+			if(sendEmail){
+				//TODO: Email brett to accept the trip.
+			}
+			
+		}else if(finalAdmin == userID) {
+//			set approved to true
+			command = "approved=true";
+//			email xyz to put on calendar.
+//			email creator to say its accepted.
+		}else {
+//			throw err, they arent an admin
+			return "{\"valid\":\"false\", \"errMsg\":\"You are not permitted to do that action.\"}";
+		}
+		
+		alterDataBase("UPDATE trips SET "+command+" WHERE id=" + data.get("trip-ID") + ";");
+		return "{\"valid\":\"true\"}";
+	}
+
+	private String uploadFiles(HashMap<String, String> data) {
+//		TODO: maybe try this??? https://www.rgagnon.com/javadetails/java-0542.html
+//		String financeContents = data.get("financeContents");
+//		File f = new File(System.getProperty("user.home")+"/Documents/test.docx");
+//		FileWriter fw = null;
+//		try {
+//			fw = new FileWriter(f);
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//		PrintWriter pw = new PrintWriter(fw);
+//		pw.print(financeContents);
+//		System.out.println(financeContents);
+//		pw.close();
+		
+		alterDataBase("UPDATE trips SET approved=false, initial_approvals=\"\" WHERE id=" + data.get("tripID") + ";");
+		return "{\"valid\":\"true\", \"errMsg\":\"//TODO.\"}";
+	}
+
+	private String getTrip(HashMap<String, String> data) {
+		String tripID = data.get("trip-id");
+		HashMap<String,Object> tripData = getFirst("SELECT * FROM trips WHERE id = "+tripID+";");
+		
+		HashMap<String,String> ret = new HashMap<>();
+		for(String key : tripData.keySet())
+			ret.put(key, ""+tripData.get(key));
+		
+		ret.put("valid", "true");
+		return new Gson().toJson(ret);
+	}
 
 	private String getTrips(HashMap<String, String> data) {
 		HashMap<String, String> reply = new HashMap<>();
-		// TODO Get ids from user data??? allows us to choose which ones to
+		// Get ids from user data??? allows us to choose which ones to
 		// return
 		// (eg for load more and capping limit)
 		// Should we return the trip date?
@@ -75,26 +192,94 @@ public class Utils {
 		// not approved: orange
 		// approved, but not completed: yellow
 		// completed: green
-		List<HashMap<String, Object>> l = queryDataBase(
-				"SELECT location, approved, id, date_start FROM trips WHERE creator = " + data.get("id") + ";");
+		int id = Integer.parseInt(data.get("id"));
+		
+		String ids = null;
+		int total;
+		int[] keys;
+				
+		if(admins.contains(id) || finalAdmin==id){
+			total = (int) (long) getFirst("SELECT count(*) FROM trips;").get("count(*)");
+			keys = new int[total];
+			for(int i = 0; i < total; i++)
+				keys[i] = i;
+		}else{
+			// get trips from users trips section
+			HashMap<String, String> trips = getUsersTrips(id);
+			
+			if(trips==null){
+				//user has no trips
+				reply.put("valid", "true");
+				return new Gson().toJson(reply);
+			}
+			
+	        keys = getOrder(trips);
+						
+			total = keys.length;
+		}
+		int exclude = 0;//allow for users to load more
+		if(data.get("start") != null)
+			exclude = Integer.parseInt(data.get("start"));
 
-		// TODO get trips from users json section (change to text)
+		for (int i = total-1-exclude; i>=(total-exclude<tripsToLoad?0:total-exclude-tripsToLoad); i--) {
+			if(ids == null)
+				ids = keys[i]+"";
+			else
+				ids+=","+keys[i];
+		}
+//		System.out.println(ids);
+		
+		List<HashMap<String, Object>> list = queryDataBase("SELECT location, approved, id, date_start, creator FROM trips WHERE id in (" + ids + ");");
 
-		for (HashMap<String, Object> m : l) {
+		HashMap<Integer, String> users = new HashMap<>();
+		for(HashMap<String, Object> m : list){
+			users.put(Integer.parseInt(""+m.get("creator")), "");
+		}
+		
+		String creators_ids = null;
+		for(Integer s : users.keySet()){
+			if(creators_ids == null)
+				creators_ids = s+"";
+			else
+				creators_ids+=","+s;
+		}
+		List<HashMap<String, Object>> creators = queryDataBase("SELECT id, email FROM users WHERE id in (" + creators_ids + ");");
+		for(HashMap<String, Object> m : creators){
+			users.put(Integer.parseInt(""+m.get("id")), (m.get("email")+"").split("@")[0]);
+		}
+
+		
+		for(HashMap<String, Object> m : list){
 			// loop through all trips and add their details to the list.
 			HashMap<String, String> tripData = new HashMap<>();
 			tripData.put("location", m.get("location") + "");
 			tripData.put("approved", m.get("approved") + "");
 			tripData.put("date_start", m.get("date_start") + "");
-			tripData.put("creator",
-					("" + getFirst("SELECT email FROM users WHERE id=" + data.get("id") + ";").get("email"))
-							.split("@")[0] + "");
+			tripData.put("creator", users.get(Integer.parseInt(""+m.get("creator"))));
 			reply.put(m.get("id") + "", new Gson().toJson(tripData));
 		}
 		reply.put("valid", "true");
 
 		return new Gson().toJson(reply);
 	}
+	
+    private static int[] getOrder(HashMap<String, String> data) {
+        //sorts a hashmap from low to high values
+        
+        int[] keys = new int[data.keySet().size()];
+        
+        //convert the keys to integers
+        for(int i = 0; i < data.keySet().size(); i++){
+            int key = Integer.parseInt(""+data.keySet().toArray()[i]);
+            keys[i] = key;
+        }
+        
+        //sort it
+        Arrays.sort(keys);
+        
+        return keys;
+    }
+
 
 	private String logIn(HashMap<String, String> data) {
 		// Check email provided is valid
@@ -107,13 +292,20 @@ public class Utils {
 		// TODO Check password against college systems
 		// if pw is correct, continue
 
-		// pull account from DB
+		// pull account from DB, so user id is known
 		HashMap<String, Object> user = getFirst("SELECT id FROM users WHERE email = \"" + email + "\";");
 
 		if (user == null)
 			return "{\"valid\":\"false\", \"errMsg\":\"Invalid account.\"}";
-
+		//Maybe instead of returning invalid, we check on college db if they
+		//are a staff member, if so add them here so that we dont need to add
+		//all staff to the database at the start???
+		
+		//nvm, we pull the staff from this database so that means staff who havent
+		//logged in cant go on trips.
+		
 		int id = (int) user.get("id");
+		//generate a random login token
 		String token = generateToken();
 
 		// save token to DB and send data to client, allowing the login.
@@ -152,16 +344,20 @@ public class Utils {
 	}
 
 	private String initTrip(HashMap<String, String> data) {
+		int id = Integer.parseInt(data.get("id"));
 		// Generate a trip ID and add the trip to this user.
 		// get the number of items in the database, and set this as the id.
 		// IDs start at 0 and count up
 		int tripID = (int) (long) getFirst("SELECT count(*) FROM trips;").get("count(*)");
 
 		// contact database, and add a new trip.
-		alterDataBase("INSERT INTO trips(id, creator) VALUES(" + tripID + ", \"" + data.get("id") + "\");");
+		alterDataBase("INSERT INTO trips(id, creator) VALUES(" + tripID + ", \"" + id + "\");");
 
-		// TODO save trip to users data
+		HashMap<String, String> trips = getUsersTrips(id);
+		trips.put(tripID+"", System.currentTimeMillis()+"");
+		alterDataBase("UPDATE users SET trips=\"" + new Gson().toJson(trips).replace("\"", "\\\"") + "\" WHERE id=" + id + ";");
 
+		
 		// Return trip ID to user
 		return "{\"valid\":\"true\", \"trip id\":\"" + tripID + "\"}";
 	}
@@ -279,13 +475,36 @@ public class Utils {
 			if (!(staff.split("\n").length >= ((max - 1) / 20) + 1))
 				return "{\"valid\":\"false\", \"errMsg\":\"Not enough staff.\"}";
 
-			// TODO: add staff to command
-			// command+="staff=[{\"staff\":\""+staff.replace("\n", ",")+"\"}],
-			// ";
-			command += "staff=null, ";
+			// add staff to command
+			command+="staff=\""+staff.replace("\n", ",")+"\", ";
 
 			// get mode of transport
 			String trans = data.get("modeOfTransport");
+			String transOther = data.get("transportOther");
+			switch(trans){
+				case "0":
+					trans = "car";
+					break;
+				case "1":
+					trans = "bus";
+					break;
+				case "2":
+					trans = "train";
+					break;
+				case "3":
+					trans = "coach";
+					break;
+				case "4":
+					trans = "walk";
+					break;
+				case "5":
+					if(transOther.equals("")){
+						return "{\"valid\":\"false\", \"errMsg\":\"Please fill out mode of transport.\"}";
+					}
+					trans = transOther;
+					break;
+				
+			}
 			command += "transport=\"" + trans + "\", ";
 
 			// get the total cost, and check its a number
@@ -358,27 +577,20 @@ public class Utils {
 	// Sends a query to the DB.
 	// TODO: change username, password, port and IP to be in config.
 	public List<HashMap<String, Object>> queryDataBase(String query) {
-		try {
-			// gets class to connect to DB
-			Class.forName("com.mysql.cj.jdbc.Driver");
-
-			// initiate a connection to the DB
-			Connection connection = DriverManager.getConnection("jdbc:mysql://13.59.238.54:3306/trips", "test_user",
-					"Password123_");
-
+		try{
 			// TODO Sanitize etc
 			// Creates and executes a statement.
-			Statement stmt = connection.createStatement();
+			Statement stmt = DBquery.createStatement();
 			ResultSet resultSet = stmt.executeQuery(query);
-
+	
 			// get the number of columns returned
 			ResultSetMetaData meta = resultSet.getMetaData();
 			int columns = meta.getColumnCount();
-
+	
 			// create a list of rows returned.
 			ArrayList<HashMap<String, Object>> list = new ArrayList<HashMap<String, Object>>();// TODO
 																								// change
-
+	
 			// while there are more rows
 			while (resultSet.next()) {
 				// create a map for the row
@@ -392,40 +604,58 @@ public class Utils {
 			}
 			// close result set and connection to prevent a leak.
 			resultSet.close();
-			connection.close();
-
+	//		connection.close();
+	
 			// return our list of rows
 			return list;
 		} catch (Exception e) {
-			System.out.println(e);
+			System.out.println(query);
+			e.printStackTrace();
+			initDBs();//could of just timmed out
 		}
 		return null;
 	}
 
-	// Allows us to alter values in the DB
-	public boolean alterDataBase(String query) {
+	public void initDBs(){
 		try {
+			if(DBquery!=null)
+				DBquery.close();
+			if(DBalter!=null)
+				DBalter.close();
+			
 			// gets class to connect to DB
 			Class.forName("com.mysql.cj.jdbc.Driver");
-
+	
 			// initiate a connection to the DB
-			Connection connection = DriverManager.getConnection("jdbc:mysql://13.59.238.54:3306/trips", "test_user",
-					"Password123_");
-
-			// TODO Sanitize etc
-			// Creates and executes a statement.
-			Statement stmt = connection.createStatement();
-			boolean b = stmt.execute(query);
-			connection.close();
-
-			// returns the boolean returned from executing the statement,
-			// should it be needed anywhere.
-			return b;
+			DBquery = DriverManager.getConnection("jdbc:mysql://13.59.238.54:3306/trips", "test_user",
+					"Password123_");	
+			DBalter = DriverManager.getConnection("jdbc:mysql://13.59.238.54:3306/trips", "test_user",
+				"Password123_");
 		} catch (Exception e) {
-			System.out.println(query);
 			System.out.println(e);
-			return false;
 		}
+	}
+	
+	// Allows us to alter values in the DB
+	public void alterDataBase(String query) {
+		//Run this on a new thread; it will optimise times for client
+		//as they wont need to wait for additional commands to be run
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					// TODO Sanitize etc
+					// Creates and executes a statement.
+					Statement stmt = DBalter.createStatement();
+					stmt.executeUpdate(query);
+//					connection.close();
+				} catch (Exception e) {
+					System.out.println(query);
+					e.printStackTrace();
+					initDBs();//could of just timmed out
+				}
+			}
+		}).start();
 	}
 
 	// Gets the first row returned from the database query
@@ -433,7 +663,18 @@ public class Utils {
 		// sends the query to the DB, then gets element 0 of it.
 		return getData(queryDataBase(query), 0);
 	}
-
+	
+	//returns all the trips that belong to a user
+	public HashMap<String, String> getUsersTrips(int id){
+		String trips = getFirst("SELECT trips FROM users WHERE id="+id+";").get("trips")+"";
+		if(trips.equalsIgnoreCase("null")){
+			trips = "{}";
+		}else if(trips.equalsIgnoreCase("")){
+			trips = "{}";
+		}
+		return stringToJSON(trips);
+	}
+	
 	// Returns the database row with the index of id
 	public static HashMap<String, Object> getData(List<HashMap<String, Object>> list, int id) {
 
