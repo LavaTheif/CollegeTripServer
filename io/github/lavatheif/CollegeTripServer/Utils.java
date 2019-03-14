@@ -1,6 +1,14 @@
 package io.github.lavatheif.CollegeTripServer;
 
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -69,6 +77,9 @@ public class Utils extends SendEmail{
 			break;
 		case ("file upload"):// Sets the variables the user enters
 			response = uploadFiles(data);
+			break;
+		case ("file download"):// allows admins and users to download the files
+			response = downloadFiles(data);
 			break;
 		case ("accept"):// Allows admins to accept the trip
 			response = approveTrip(data);
@@ -208,9 +219,43 @@ public class Utils extends SendEmail{
 //		System.out.println(financeContents);
 //		pw.close();
 		
+		String financePath = data.get("finance");
+		String letterPath = data.get("letter");
+		String riskPath = data.get("risk");
+		ArrayList<Object> j = new ArrayList<>();
+		j.add(financePath);
+		j.add(letterPath);
+		j.add(riskPath);
+		j.add(data.get("tripID"));
+		alterDataBase("UPDATE files SET finance=?, letter=?, risks=? WHERE trip_id=?;", j);
 		//Validate files before emails
-		
 		boolean all_uploaded = true;
+		//boolean all_uploaded = false;
+		
+		ArrayList<Object> i = new ArrayList<>();
+		if(financePath != null){
+			String financeSuffix = financePath.split("\\.")[(financePath.split("\\.").length)-1];
+			i.add(financeSuffix);
+		}else{
+			i.add("null");
+			all_uploaded = false;
+		}
+		if(letterPath != null){
+			String letterSuffix = letterPath.split("\\.")[(letterPath.split("\\.").length)-1];
+			i.add(letterSuffix);
+		}else{
+			i.add("null");
+			all_uploaded = false;
+		}
+		if(riskPath != null){
+			String riskSuffix = riskPath.split("\\.")[(riskPath.split("\\.").length)-1];
+			i.add(riskSuffix);
+		}else{
+			i.add("null");
+			all_uploaded = false;
+		}
+		i.add(data.get("tripID"));
+		
 		if(all_uploaded){
 			for(int admn : admins){
 				String user = lookup_admins.get(admn);
@@ -219,10 +264,20 @@ public class Utils extends SendEmail{
 					return "{\"valid\":\"false\", \"errMsg\":\"Could not send E-Mail to "+user+".\"}";
 			}
 		}
-		ArrayList<Object> i = new ArrayList<>();
-		i.add(data.get("tripID"));
-		alterDataBase("UPDATE trips SET approved=false, initial_approvals=\"\" WHERE id=?;", i);
+		
+		alterDataBase("UPDATE trips SET approved=false, finance_report=?, parent_letter=?, risk_assessment=?, initial_approvals=\"\" WHERE id=?;", i);
 		return "{\"valid\":\"true\", \"errMsg\":\"//TODO.\"}";
+	}
+	
+	private String downloadFiles(HashMap<String, String> data){
+		
+		String trip_id = data.get("trip-id");
+		ArrayList<Object> i = new ArrayList<>();
+		i.add(trip_id);
+		HashMap<String, Object> ret = getFirst("SELECT finance, letter, risks FROM files WHERE trip_id=?;", i);
+		ret.put("valid", "true");
+		ret.put("errMsg", "TODO");
+		return new Gson().toJson(ret);
 	}
 
 	private String getTrip(HashMap<String, String> data) {
@@ -437,6 +492,9 @@ public class Utils extends SendEmail{
 		i.add(tripID);
 		i.add(id);
 		alterDataBase("INSERT INTO trips(id, creator) VALUES(?, ?);", i);
+		i = new ArrayList<>();
+		i.add(tripID);
+		alterDataBase("INSERT INTO files(trip_id) VALUES(?);", i);
 
 		HashMap<String, String> trips = getUsersTrips(id);
 		trips.put(tripID+"", System.currentTimeMillis()+"");
@@ -719,8 +777,14 @@ public class Utils extends SendEmail{
 				}catch(Exception e){
 					if(obj.equalsIgnoreCase("true")||obj.equalsIgnoreCase("false"))
 						s.setBoolean(i, obj.equalsIgnoreCase("true"));
-					else
-						s.setString(i, obj+"");
+					else{
+						try{
+							InputStream is = new FileInputStream(new File(obj));
+							s.setBlob(i, is);
+						}catch(Exception e1){
+							s.setString(i, obj+"");
+						}
+					}
 				}
 			}
 			
@@ -760,19 +824,23 @@ public class Utils extends SendEmail{
 
 	public void initDBs(){
 		try {
-			if(DBquery!=null)
+			if(DBquery!=null){
 				DBquery.close();
+			}
 			if(DBalter!=null)
 				DBalter.close();
-			
+			System.out.println("1");
 			// gets class to connect to DB
 			Class.forName("com.mysql.cj.jdbc.Driver");
-	
+			System.out.println("2");
+			System.out.println("ip: " + DB_IP +"\nport :" + DB_PORT + "\nusername :" + DB_USER+"\npassword :" +DB_PASS);
 			// initiate a connection to the DB
 			DBquery = DriverManager.getConnection("jdbc:mysql://"+DB_IP+":"+DB_PORT+"/trips", DB_USER,
-					DB_PASS);	
+					DB_PASS);
+			System.out.println("3");
 			DBalter = DriverManager.getConnection("jdbc:mysql://"+DB_IP+":"+DB_PORT+"/trips", DB_USER,
 					DB_PASS);
+			System.out.println("4");
 		} catch (Exception e) {
 			System.out.println(e);
 		}
@@ -797,8 +865,14 @@ public class Utils extends SendEmail{
 						}catch(Exception e){
 							if(obj.equalsIgnoreCase("true")||obj.equalsIgnoreCase("false"))
 								s.setBoolean(i, obj.equalsIgnoreCase("true"));
-							else
-								s.setString(i, obj+"");
+							else{
+								try{
+									InputStream is = new FileInputStream(new File(obj));
+									s.setBlob(i, is);
+								}catch(Exception e1){
+									s.setString(i, obj+"");
+								}
+							}
 						}
 					}
 					
