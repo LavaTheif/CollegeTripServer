@@ -42,7 +42,8 @@ public class _INIT_ extends Utils {
 					"USE trips;",
 					"CREATE TABLE trips(id INT, creator VARCHAR(10), location VARCHAR(100), address TEXT, date_start VARCHAR(20), time_start VARCHAR(15), end VARCHAR(15), is_residential BOOLEAN, purpose TEXT, max_students INT, staff TEXT, groups TEXT, transport VARCHAR(100), cost INT, finance_report VARCHAR(10), parent_letter VARCHAR(10), risk_assessment VARCHAR(10), initial_approvals TEXT, approved BOOLEAN);",
 					"CREATE TABLE users(id INT, email VARCHAR(30), trips TEXT, token VARCHAR(30));",
-					"--please import all users into the users table.  'id' can be anything, but email must end with @woking.ac.uk"
+					"--please import all users into the users table.  'id' can be anything, but email must end with @woking.ac.uk",
+					"CREATE TABLE files(finance BLOB, letter BLOB, risks BLOB, trip_id INT);"
 			};
 			config.createNewFile();
 			FileWriter f = new FileWriter(config);

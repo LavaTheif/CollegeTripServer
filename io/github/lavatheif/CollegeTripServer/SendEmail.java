@@ -49,7 +49,7 @@ public class SendEmail {
 		String content = "Hello "+username+", \n\nA trip is currently awaiting your approval!\n"
 				+ "Log into the trip planner to view its details.\n\n\n"
 				+ "Trip ID: "+id+"\n";
-		System.out.println(content);
+//		System.out.println(content);
 		return content;
 	}
 	
@@ -59,15 +59,16 @@ public class SendEmail {
 				+ "This trip will be taking place on "+trip_data.get("date_start")+" at "+trip_data.get("time_start")+"\n"
 				+ "it is"+(res?"":"n't")+" a residential trip, ending "+(res?"after "+trip_data.get("end")+" days":"at "+trip_data.get("end"))+"\n"
 				+ "Trip ID: "+id+"\n";
-		System.out.println(content);
+//		System.out.println(content);
 		return content;
 	}
 
-	public static String buildDenyEMail(String id, String user, String by) {
-		String content = "Hello "+user+", \n\nA trip was just denied by "+by+"\n"
-				+ "If you are the owner of this trip, please see the reason why.  If not, we are just letting you know that you may need to accept it again soon.\n"
+	public static String buildDenyEMail(String id, String user, String by, String reason) {
+		String content = "Hello "+user+", \n\nA trip was just denied by "+by+"\n\n"
+				+ "Reason: "+reason
+				+ "\n\nIf you are the owner of this trip, please edit the details.  If not, we are just letting you know that you may need to accept it again soon.\n"
 				+ "Trip ID: "+id+"\n";
-		System.out.println(content);
+//		System.out.println(content);
 		return content;
 	}
 
