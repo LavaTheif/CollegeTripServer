@@ -25,24 +25,26 @@ public class _INIT_ extends Utils {
 							"SERVER_PORT: 25000",
 							"DB_IP: localhost",
 							"DB_PORT: 3306",
+							"DB_SCHEMA: \"trips\"",
 							"##DB account details",
 							"DB_USERNAME: \"test_user\"",
 							"DB_PASSWORD: \"Password123_\"",
 							"##email account details",
-							"EMAIL_USERNAME: \"trips\"",
-							"EMAIL_PASSWORD: \"Password123_\"",
+							"EMAIL_USERNAME: \"email\"",
+							"EMAIL_PASSWORD: \"password\"",
 							"##staff who initially approve the trip",
-							"LEVEL_1_STAFF: [\"LBE\", \"ACR\"]",
+							"LEVEL_1_STAFF: [\"staff1\", \"staff2\"]",
 							"##final approval staff member",
-							"LEVEL_2_STAFF: \"BRF\"",
+							"LEVEL_2_STAFF: \"Principle\"",
 							"##username of the college calendar manager",
-							"CALENDAR_MANAGER: \"DCO\""
+							"CALENDAR_MANAGER: \"Calendar manager\""
 							};
 			String[] DB_SETUP = {"CREATE DATABASE trips;",
 					"USE trips;",
-					"CREATE TABLE trips(id INT, creator VARCHAR(10), location VARCHAR(100), address TEXT, date_start VARCHAR(20), time_start VARCHAR(15), end VARCHAR(15), is_residential BOOLEAN, purpose TEXT, max_students INT, staff TEXT, groups TEXT, transport VARCHAR(100), cost INT, finance_report VARCHAR(10), parent_letter VARCHAR(10), risk_assessment VARCHAR(10), initial_approvals TEXT, approved BOOLEAN);",
-					"CREATE TABLE users(id INT, email VARCHAR(30), trips TEXT, token VARCHAR(30));",
-					"--please import all users into the users table.  'id' can be anything, but email must end with @woking.ac.uk",
+					"CREATE TABLE trips(id INT, creator INT, location VARCHAR(100), address TEXT, date_start VARCHAR(20), time_start VARCHAR(15), end VARCHAR(15), is_residential BOOLEAN, purpose TEXT, max_students INT, staff TEXT, groups TEXT, transport VARCHAR(100), cost INT, finance_report VARCHAR(10), parent_letter VARCHAR(10), risk_assessment VARCHAR(10), initial_approvals TEXT, awaiting_final BOOLEAN, approved BOOLEAN);",
+					"CREATE TABLE users(id INT, email VARCHAR(30), token VARCHAR(30));",
+					"--please import all users into the users table, with one user per line."
+					+ "  We have supplied an 'import_users.jar' file to automate this process from the commandline.",
 					"CREATE TABLE files(finance BLOB, letter BLOB, risks BLOB, trip_id INT);"
 			};
 			config.createNewFile();
@@ -63,6 +65,8 @@ public class _INIT_ extends Utils {
 			pw.close();
 			
 			System.out.println("Created DB_SETUP file at "+DB_SETUP_FILE.getAbsolutePath());
+			System.out.println("\n\nPlease see the README.txt");
+			System.exit(0);
 		}
 		
 		String[] config_data = readFile(config).replaceAll("##.*\n", "").split("\n");
@@ -90,6 +94,7 @@ public class _INIT_ extends Utils {
 		Utils.EMAIL_USER = (configContents.get("EMAIL_USERNAME"));
 		Utils.EMAIL_PASS = (configContents.get("EMAIL_PASSWORD"));
 		Utils.CALENDAR_MANAGER = (configContents.get("CALENDAR_MANAGER"));
+		Utils.SCHEMA = (configContents.get("DB_SCHEMA"));
 		
 		initDBs();
 		
@@ -102,20 +107,28 @@ public class _INIT_ extends Utils {
 
 		String finalAdmn = configContents.get("LEVEL_2_STAFF");
 		
-		ArrayList<Object> obj;
-		for(String s : admUsrnms){
+		try{
+			ArrayList<Object> obj;
+			for(String s : admUsrnms){
+				obj = new ArrayList<>();
+				obj.add(s+"@woking.ac.uk");
+				System.out.println(s);
+				int id = Integer.parseInt(getFirst("SELECT id FROM users WHERE email=?;", obj).get("id")+"");
+				admins.add(id);
+				lookup_admins.put(id, s);
+			}
+			
 			obj = new ArrayList<>();
-			obj.add(s+"@woking.ac.uk");
-			int id = Integer.parseInt(getFirst("SELECT id FROM users WHERE email=?;", obj).get("id")+"");
-			admins.add(id);
-			lookup_admins.put(id, s);
+			obj.add(finalAdmn+"@woking.ac.uk");
+			System.out.println(finalAdmn);
+			finalAdmin = Integer.parseInt(getFirst("SELECT id FROM users WHERE email=?;", obj).get("id")+"");
+			lookup_admins.put(finalAdmin, finalAdmn);
+		}catch(Exception e){
+			System.err.println("Could not find an admin in the database.\n"
+					+ "Try:\n- Checking all admins are in the users database.\n"
+					+ "- Checking the spelling of admins in the config.");
+			System.exit(1);
 		}
-		
-		obj = new ArrayList<>();
-		obj.add(finalAdmn+"@woking.ac.uk");
-		finalAdmin = Integer.parseInt(getFirst("SELECT id FROM users WHERE email=?;", obj).get("id")+"");
-		lookup_admins.put(finalAdmin, finalAdmn);
-
 		// Set up sockets for desktop clients to connect to.
 		setUpSocket();
 

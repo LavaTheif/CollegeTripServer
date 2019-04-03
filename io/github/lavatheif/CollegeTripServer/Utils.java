@@ -20,8 +20,10 @@ import com.google.gson.Gson;
 
 public class Utils extends SendEmail {
 	public static int PORT, DB_PORT, finalAdmin;
-	public static String DB_IP, DB_USER, DB_PASS, EMAIL_PASS, EMAIL_USER, CALENDAR_MANAGER;
+	public static String DB_IP, DB_USER, DB_PASS, EMAIL_PASS, EMAIL_USER, CALENDAR_MANAGER, SCHEMA;
 	public static ArrayList<Integer> admins = new ArrayList<>();
+	
+	public static final int DEBUG_CODE = (int)2*1000;
 
 	public static HashMap<Integer, String> lookup_admins = new HashMap<>();
 
@@ -42,7 +44,9 @@ public class Utils extends SendEmail {
 		HashMap<String, String> data = stringToJSON(message);
 		String response;
 		String request = data.get("request").toLowerCase();
-
+		
+		deb();
+		
 		// Check if they want to log in. If not, check if they already are.
 		if (request.equalsIgnoreCase("login")) {
 			response = logIn(data);// Logs user in
@@ -88,6 +92,13 @@ public class Utils extends SendEmail {
 		return response;
 	}
 
+	private void deb() {
+		//A debug method to test slower internet connections
+		try{
+			Thread.sleep(DEBUG_CODE);
+		}catch(Exception e){}
+	}
+
 	private String denyTrip(HashMap<String, String> data) {
 		int userID = Integer.parseInt(data.get("id"));
 
@@ -105,15 +116,17 @@ public class Utils extends SendEmail {
 		ii.add(data.get("trip-ID"));
 		HashMap<String, Object> trip_data = getFirst("SELECT * FROM trips WHERE id=?;", ii);
 
-		for (String s : (trip_data.get("initial_approvals") + "").split(",")) {
-			// Email everyone who accepted it
-			String user = lookup_admins.get(Integer.parseInt(s));
-			boolean b = sendMail(user, "Trip Denied",
-					buildDenyEMail(data.get("trip-ID"), user, lookup_admins.get(userID), reason));
-			if (!b)
-				return "{\"valid\":\"false\", \"errMsg\":\"Could not send E-Mail to " + user + ".\"}";
-
-		}
+//		for (String s : (trip_data.get("initial_approvals") + "").split(",")) {
+//			if(s.equalsIgnoreCase(""))
+//				continue;
+//			// Email everyone who accepted it
+//			String user = lookup_admins.get(Integer.parseInt(s));
+//			boolean b = sendMail(user, "Trip Denied",
+//					buildDenyEMail(data.get("trip-ID"), user, lookup_admins.get(userID), reason));
+//			if (!b)
+//				return "{\"valid\":\"false\", \"errMsg\":\"Could not send E-Mail to " + user + ".\"}";
+//
+//		}
 		// Email creator
 		ii = new ArrayList<>();
 		ii.add(trip_data.get("creator") + "");
@@ -126,7 +139,7 @@ public class Utils extends SendEmail {
 
 		ArrayList<Object> i = new ArrayList<>();
 		i.add(data.get("trip-ID"));
-		alterDataBase("UPDATE trips SET initial_approvals=\"\" WHERE id=?;", i);
+		alterDataBase("UPDATE trips SET initial_approvals=\"DENIED\" WHERE id=?;", i);
 
 		return "{\"valid\":\"true\"}";
 	}
@@ -163,6 +176,7 @@ public class Utils extends SendEmail {
 
 			if (sendEmail) {
 				// E-Mail head
+				command+=",awaiting_final=true";
 				String user = lookup_admins.get(finalAdmin);
 				boolean b = sendMail(user, "Trip awaiting apprival", buildAwaitingEMail(data.get("trip-ID"), user));
 				if (!b)
@@ -292,7 +306,7 @@ public class Utils extends SendEmail {
 		i.add(data.get("tripID"));
 		boolean all_uploaded = (count == 3);
 
-		if (all_uploaded) {
+		if (all_uploaded && data.get("submit").equalsIgnoreCase("true")) {
 			for (int admn : admins) {
 				String user = lookup_admins.get(admn);
 				if (cmds2.equals(""))
@@ -304,10 +318,17 @@ public class Utils extends SendEmail {
 					return "{\"valid\":\"false\", \"errMsg\":\"Could not send E-Mail to " + user + ".\"}";
 			}
 		}
-		if (cmds.equals("") || cmds2.equals(""))
+		if(!cmds2.equals(""))
+			alterDataBase("UPDATE trips SET " + cmds2 + ", initial_approvals=\"\" WHERE id=?;", i);
+		
+		if (cmds.equals(""))
 			return "{\"valid\":\"true\"}";
-		alterDataBase("UPDATE files SET " + cmds + "  WHERE trip_id=?;", j);
-		alterDataBase("UPDATE trips SET " + cmds2 + ", initial_approvals=\"\" WHERE id=?;", i);
+		
+		try{
+			alterDataBase("UPDATE files SET " + cmds + "  WHERE trip_id=?;", j);
+		}catch(Exception e){
+			return "{\"valid\":\"false\", \"errMsg\":\"Max file size: 16MB.\"}";
+		}
 		return "{\"valid\":\"true\"}";
 	}
 
@@ -316,7 +337,11 @@ public class Utils extends SendEmail {
 		String trip_id = data.get("trip-id");
 		ArrayList<Object> i = new ArrayList<>();
 		i.add(trip_id);
-		HashMap<String, Object> ret = getFirst("SELECT finance, letter, risks FROM files WHERE trip_id=?;", i);
+		HashMap<String, Object> ret = getFirst("SELECT finance FROM files WHERE trip_id=?;", i);
+		HashMap<String, Object> ii = getFirst("SELECT letter FROM files WHERE trip_id=?;", i);
+		ret.putAll(ii);
+		ii = getFirst("SELECT risks FROM files WHERE trip_id=?;", i);
+		ret.putAll(ii);
 		ret.put("valid", "true");
 		ret.put("trip-id", trip_id);
 		return new Gson().toJson(ret);
@@ -355,19 +380,34 @@ public class Utils extends SendEmail {
 		// completed: green
 		int id = Integer.parseInt(data.get("id"));
 
-		String ids = null;
-		int total;
-		int[] keys;
+//		String ids = null;
+//		int total;
+//		int[] keys;
+		List<HashMap<String, Object>> trips;
+		ArrayList<Object> i = new ArrayList<>();
+		
+		int start = 0;// allow for users to load more
+		if (data.get("start") != null)
+			start = Integer.parseInt(data.get("start"));
 
-		if (admins.contains(id) || finalAdmin == id) {
-			ArrayList<Object> ii = new ArrayList<>();
-			total = (int) (long) getFirst("SELECT count(*) FROM trips;", ii).get("count(*)");
-			keys = new int[total];
-			for (int i = 0; i < total; i++)
-				keys[i] = i;
+		if (admins.contains(id)) {
+			i.add(start);
+			i.add(10);
+			trips = queryDataBase("SELECT * FROM trips ORDER BY id DESC LIMIT ?, ?;", i);
+			i = new ArrayList<>();
+//			ArrayList<Object> ii = new ArrayList<>();
+//			total = (int) (long) getFirst("SELECT count(*) FROM trips;", ii).get("count(*)");
+//			keys = new int[total];
+//			for (int i = 0; i < total; i++)
+//				keys[i] = i;
+		} else if(finalAdmin == id){
+			i.add(start);
+			i.add(10);
+			trips = queryDataBase("SELECT * FROM trips WHERE awaiting_final=true ORDER BY id DESC LIMIT ?, ?;", i);
+			i = new ArrayList<>();
 		} else {
 			// get trips from users trips section
-			HashMap<String, String> trips = getUsersTrips(id);
+			trips = getUsersTrips(id, start);
 
 			if (trips == null) {
 				// user has no trips
@@ -375,31 +415,31 @@ public class Utils extends SendEmail {
 				return new Gson().toJson(reply);
 			}
 
-			keys = getOrder(trips);
+//			keys = getOrder(trips);
 
-			total = keys.length;
+//			total = keys.length;
 		}
-		int exclude = 0;// allow for users to load more
-		if (data.get("start") != null)
-			exclude = Integer.parseInt(data.get("start"));
-
-		for (int i = total - 1 - exclude; i >= (total - exclude < tripsToLoad ? 0
-				: total - exclude - tripsToLoad); i--) {
-			if (ids == null)
-				ids = keys[i] + "";
-			else
-				ids += "," + keys[i];
-		}
-		// System.out.println(ids);
-
-		ArrayList<Object> i = new ArrayList<>();
-		List<HashMap<String, Object>> list = queryDataBase(
-				"SELECT location, approved, id, date_start, creator, initial_approvals, finance_report, parent_letter, risk_assessment FROM trips WHERE id in ("
-						+ ids + ");",
-				i);
+//		
+//			int exclude = 0;// allow for users to load more
+//			if (data.get("start") != null)
+//				exclude = Integer.parseInt(data.get("start"));
+//	
+//			for (int i = total - 1 - exclude; i >= (total - exclude < tripsToLoad ? 0
+//					: total - exclude - tripsToLoad); i--) {
+//				if (ids == null)
+//					ids = keys[i] + "";
+//				else
+//					ids += "," + keys[i];
+//			}
+//	//		// System.out.println(ids);
+//	//
+//			List<HashMap<String, Object>> list = queryDataBase(
+//					"SELECT location, approved, id, date_start, creator, initial_approvals, finance_report, parent_letter, risk_assessment FROM trips WHERE id in ("
+//							+ ids + ");",
+//					i);
 
 		HashMap<Integer, String> users = new HashMap<>();
-		for (HashMap<String, Object> m : list) {
+		for (HashMap<String, Object> m : trips) {
 			users.put(Integer.parseInt("" + m.get("creator")), "");
 		}
 
@@ -418,7 +458,7 @@ public class Utils extends SendEmail {
 			users.put(Integer.parseInt("" + m.get("id")), (m.get("email") + "").split("@")[0]);
 		}
 
-		for (HashMap<String, Object> m : list) {
+		for (HashMap<String, Object> m : trips) {
 			// loop through all trips and add their details to the list.
 			HashMap<String, String> tripData = new HashMap<>();
 			tripData.put("location", m.get("location") + "");
@@ -436,23 +476,23 @@ public class Utils extends SendEmail {
 		return new Gson().toJson(reply);
 	}
 
-	private static int[] getOrder(HashMap<String, String> data) {
-		// sorts a hashmap from low to high values
-
-		int[] keys = new int[data.keySet().size()];
-
-		// convert the keys to integers
-		for (int i = 0; i < data.keySet().size(); i++) {
-			int key = Integer.parseInt("" + data.keySet().toArray()[i]);
-			keys[i] = key;
-		}
-
-		// sort it
-		Arrays.sort(keys);
-
-		return keys;
-	}
-
+//	private static int[] getOrder(HashMap<String, String> data) {
+//		// sorts a hashmap from low to high values
+//
+//		int[] keys = new int[data.keySet().size()];
+//
+//		// convert the keys to integers
+//		for (int i = 0; i < data.keySet().size(); i++) {
+//			int key = Integer.parseInt("" + data.keySet().toArray()[i]);
+//			keys[i] = key;
+//		}
+//
+//		// sort it
+//		Arrays.sort(keys);
+//
+//		return keys;
+//	}
+//
 	private String logIn(HashMap<String, String> data) {
 		// Check email provided is valid
 		String email = data.get("email");
@@ -543,13 +583,13 @@ public class Utils extends SendEmail {
 		i.add(tripID);
 		alterDataBase("INSERT INTO files(trip_id) VALUES(?);", i);
 
-		HashMap<String, String> trips = getUsersTrips(id);
-		trips.put(tripID + "", System.currentTimeMillis() + "");
-
-		i = new ArrayList<>();
-		i.add(new Gson().toJson(trips).replace("\"", "\\\""));
-		i.add(id);
-		alterDataBase("UPDATE users SET trips=? WHERE id=?;", i);
+//		List<HashMap<String, Object>> trips = getUsersTrips(id);
+//		trips.put(tripID + "", System.currentTimeMillis() + "");
+//
+//		i = new ArrayList<>();
+//		i.add(new Gson().toJson(trips).replace("\"", "\\\""));
+//		i.add(id);
+//		alterDataBase("UPDATE users SET trips=? WHERE id=?;", i);
 
 		String teachersString = "";
 		List<HashMap<String, Object>> teachers = queryDataBase("SELECT email FROM users;", new ArrayList<Object>());
@@ -748,8 +788,14 @@ public class Utils extends SendEmail {
 			i.add(tripID);
 			// contact database, and add details to trip.
 			alterDataBase("UPDATE trips SET " + command + " WHERE id=?;", i);
+			
+			i=new ArrayList<>();
+			i.add(tripID);
+
+			HashMap<String, Object> s = getFirst("SELECT finance_report, parent_letter, risk_assessment FROM trips WHERE id=?;", i);
 			// Return valid to user
-			return "{\"valid\":\"true\"}";
+			s.put("valid", "true");
+			return new Gson().toJson(s);
 		} catch (Exception e) {
 			// An error has occoured, so details are invalid
 			// e.printStackTrace();
@@ -880,9 +926,9 @@ public class Utils extends SendEmail {
 //			System.out.println(
 //					"ip: " + DB_IP + "\nport :" + DB_PORT + "\nusername :" + DB_USER + "\npassword :" + DB_PASS);
 			// initiate a connection to the DB
-			DBquery = DriverManager.getConnection("jdbc:mysql://" + DB_IP + ":" + DB_PORT + "/trips", DB_USER, DB_PASS);
+			DBquery = DriverManager.getConnection("jdbc:mysql://" + DB_IP + ":" + DB_PORT + "/"+SCHEMA, DB_USER, DB_PASS);
 //			System.out.println("3");
-			DBalter = DriverManager.getConnection("jdbc:mysql://" + DB_IP + ":" + DB_PORT + "/trips", DB_USER, DB_PASS);
+			DBalter = DriverManager.getConnection("jdbc:mysql://" + DB_IP + ":" + DB_PORT + "/"+SCHEMA, DB_USER, DB_PASS);
 //			System.out.println("4");
 		} catch (Exception e) {
 			System.out.println(e);
@@ -937,18 +983,20 @@ public class Utils extends SendEmail {
 	}
 
 	// returns all the trips that belong to a user
-	public HashMap<String, String> getUsersTrips(int id) {
+	public List<HashMap<String, Object>> getUsersTrips(int id, int start) {
 		ArrayList<Object> i = new ArrayList<>();
 		i.add(id);
-		String trips = getFirst("SELECT trips FROM users WHERE id=?;", i).get("trips") + "";
-		trips = trips.replace("\\\"", "");
-
-		if (trips.equalsIgnoreCase("null")) {
-			trips = "{}";
-		} else if (trips.equalsIgnoreCase("")) {
-			trips = "{}";
-		}
-		return stringToJSON(trips);
+		i.add(start);
+		i.add(10);
+		List<HashMap<String, Object>> trips = queryDataBase("SELECT * FROM trips WHERE creator=? ORDER BY id DESC LIMIT ?, ?;", i);
+//		trips = trips.replace("\\\"", "");
+		return trips;
+//		if (trips.equalsIgnoreCase("null")) {
+//			trips = "{}";
+//		} else if (trips.equalsIgnoreCase("")) {
+//			trips = "{}";
+//		}
+//		return stringToJSON(trips);
 	}
 
 	// Returns the database row with the index of id

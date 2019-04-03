@@ -13,7 +13,7 @@ import javax.mail.internet.MimeMessage;
 public class SendEmail {
 	
 	public static boolean sendMail(String to, String subj_text, String msg_text){
-		final String username = Utils.EMAIL_USER + "@woking.ac.uk";
+		final String username = Utils.EMAIL_USER;
 		final String password = Utils.EMAIL_PASS;
 	
 		Properties props = new Properties();
@@ -31,7 +31,7 @@ public class SendEmail {
 
 		try {
 			Message message = new MimeMessage(session);
-			message.setFrom(new InternetAddress(username, "Trip Organiser"));
+			message.setFrom(new InternetAddress(username + "@woking.ac.uk", "Trip Organiser"));
 			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to+"@woking.ac.uk"));
 			message.setSubject(subj_text);
 			message.setText(msg_text);
@@ -55,7 +55,7 @@ public class SendEmail {
 	
 	public static String buildApprovedEMail(String id, String to, HashMap<String, Object> trip_data) {
 		boolean res = (""+trip_data.get("is_residential")).equalsIgnoreCase("true");
-		String content = "Hello "+to+", \n\nA trip to "+trip_data.get("location")+" was just approved!\n"
+		String content = "Hello "+to+", \n\nThe trip to "+trip_data.get("location")+" has just been approved!\n"
 				+ "This trip will be taking place on "+trip_data.get("date_start")+" at "+trip_data.get("time_start")+"\n"
 				+ "it is"+(res?"":"n't")+" a residential trip, ending "+(res?"after "+trip_data.get("end")+" days":"at "+trip_data.get("end"))+"\n"
 				+ "Trip ID: "+id+"\n";
@@ -66,7 +66,7 @@ public class SendEmail {
 	public static String buildDenyEMail(String id, String user, String by, String reason) {
 		String content = "Hello "+user+", \n\nA trip was just denied by "+by+"\n\n"
 				+ "Reason: "+reason
-				+ "\n\nIf you are the owner of this trip, please edit the details.  If not, we are just letting you know that you may need to accept it again soon.\n"
+				+ "\n\nYou may either edit your details, or re-submit the trip.\n"
 				+ "Trip ID: "+id+"\n";
 //		System.out.println(content);
 		return content;
